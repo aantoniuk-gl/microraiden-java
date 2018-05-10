@@ -26,18 +26,13 @@ import org.kocakosm.pitaya.security.Digests;
 public class MicroRaiden {
 
     private static final int LENGTH_OF_ID_IN_BYTES = 20;
-    private static final int INTERVAL_CHECK_TRANS_DONE = 100;
 
     private static String rpcAddress = null;
     private static String channelAddr = null;
-    private static String tokenAddr = null;
-    private static String channelABI = null;
-    private static String tokenABI = null;
+    private static Token token = null;
+    private static TransactionService transactionService = null;
 
-    private static CallTransaction.Contract channelContract = null;
-    private static CallTransaction.Contract tokenContract = null;
-    private static String appendingZerosForETH = null;
-    private static String appendingZerosForTKN = null;
+	private static CallTransaction.Contract channelContract = null;
     private static BigInteger MAX_DEPOSIT = null;
     private static BigInteger gasPrice = null;
     private static boolean debugInfo = false;
@@ -190,7 +185,7 @@ public class MicroRaiden {
 
         BigInteger tempBalance = null;
         try {
-            tempBalance = Utility.decimalToBigInteger(balance, appendingZerosForTKN);
+            tempBalance = Utility.decimalToBigInteger(balance, token.getAppendingZerosForTKN());
         } catch (NumberFormatException e) {
             System.out.println("The provided balance is not valid.");
             return null;
@@ -260,7 +255,7 @@ public class MicroRaiden {
 
         BigInteger tempBalance = null;
         try {
-            tempBalance = Utility.decimalToBigInteger(balance, appendingZerosForTKN);
+            tempBalance = Utility.decimalToBigInteger(balance, token.getAppendingZerosForTKN());
         } catch (NumberFormatException e) {
             System.out.println("The provided balance is not valid.");
             return null;
@@ -363,7 +358,7 @@ public class MicroRaiden {
     public void closeChannelCooperatively(String delegatorName, String senderName, String receiverName, String openBlockNum, String balance) {
         BigInteger tempBalance;
         try {
-            tempBalance = Utility.decimalToBigInteger(balance, appendingZerosForTKN);
+            tempBalance = Utility.decimalToBigInteger(balance, token.getAppendingZerosForTKN());
         } catch (NumberFormatException e) {
             System.out.println("The provided balance is not valid.");
             return;
@@ -457,7 +452,7 @@ public class MicroRaiden {
 
         if (!"".equals(myTransactionID)) {
             System.out.println("Waiting for Kovan to mine transactions ... ");
-            waitingForTransaction(myTransactionID);
+            transactionService.waitingForTransaction(myTransactionID);
         }
         //if(debugInfo) {
         System.out.println("\bChannel has been closed.");
@@ -475,28 +470,7 @@ public class MicroRaiden {
             return;
         }
 
-        CallTransaction.Function balanceOf = tokenContract.getByName("balanceOf");
-        byte[] functionBytes = balanceOf.encode(myWallet.getAccountID());
-        String requestString = "{\"method\":\"eth_call\"," +
-                "\"params\":[" +
-                "{" +
-                "\"to\":\"" + tokenAddr + "\"," +
-                "\"data\":\"" + "0x" + new String(org.apache.commons.codec.binary.Hex.encodeHex(functionBytes)) + "\"" +
-                "}," +
-                "\"latest\"" +
-                "]," +
-                "\"id\":42,\"jsonrpc\":\"2.0\"}";
-        if (debugInfo) {
-            System.out.println("Request in getTokenBalance = " + requestString);
-        }
-        String myTokenBalance = "";
-        try {
-            myTokenBalance = (String) httpAgent.getHttpResponse(requestString);
-        } catch (IOException e) {
-            System.out.println("Cannot get token balance for " + accountName);
-            return;
-        }
-        System.out.println("Balance of " + accountName + " = " + new Float(new BigInteger(myTokenBalance.substring(2), 16).doubleValue() / (new BigInteger(appendingZerosForTKN, 10).doubleValue())).toString() + " TKN");
+        token.balanceOf(myWallet.getAccountID());
     }
 
     /**
@@ -509,7 +483,7 @@ public class MicroRaiden {
     public void createChannel(String senderAccountName, String receiverAccountName, String deposit) {
         BigInteger initDeposit;
         try {
-            initDeposit = Utility.decimalToBigInteger(deposit, appendingZerosForTKN);
+            initDeposit = Utility.decimalToBigInteger(deposit, token.getAppendingZerosForTKN());
         } catch (NumberFormatException e) {
             System.out.println("The provided balance is not valid.");
             return;
@@ -527,69 +501,15 @@ public class MicroRaiden {
 
             byte[] receiverPrivateKey = getPrivateKeyByName(receiverAccountName);
             receiverWallet = new Wallet(receiverPrivateKey);
-            receiverWallet.update(httpAgent);
+//            receiverWallet.update(httpAgent);
         } catch (Exception e) {
             System.out.println("The sender/receiver cannot be found.");
             return;
         }
 
-        //if(debugInfo) {
-        System.out.println("User " + senderAccountName + " tries to open a channel to pay " + receiverAccountName + " up to " + deposit + " Tokens at maximum.");
-        //}
+        boolean approve = token.approve(channelAddr, senderWallet, receiverWallet.getAccountID(), initDeposit);
+        if (!approve) return;
 
-        CallTransaction.Function approve = tokenContract.getByName("approve");
-        byte[] approveFunctionBytes = approve.encode(channelAddr, initDeposit);
-        String queryApproveGasString = "{\"method\":\"eth_estimateGas\"," +
-                "\"params\":[" +
-                "{" +
-                "\"from\":\"" + senderWallet.getAccountID() + "\"," +
-                "\"to\":\"" + tokenAddr + "\"," +
-                "\"value\":\"" + "0x" + new BigInteger("0", 10).toString(16) + "\"," +
-                "\"data\":\"" + "0x" + new String(org.apache.commons.codec.binary.Hex.encodeHex(approveFunctionBytes)) + "\"" +
-                "}" +
-                "]," +
-                "\"id\":42,\"jsonrpc\":\"2.0\"}";
-        if (debugInfo) {
-            System.out.println("The request string of queryApproveGasString is " + queryApproveGasString);
-        }
-        String approveGasEstimate = "";
-        try {
-            approveGasEstimate = (String) httpAgent.getHttpResponse(queryApproveGasString);
-        } catch (IOException e) {
-            System.out.println("Invoking function with given arguments is not allowed.");
-            return;
-        }
-        if (debugInfo) {
-            System.out.println("The estimatedGas of approve is " + approveGasEstimate + ".");
-            System.out.println("The nonce of " + senderAccountName + " is " + senderWallet.nonce().toString(10));
-        }
-
-        Transaction approveTrans = new Transaction(Utility.bigIntegerToBytes(senderWallet.nonce()), // nonce
-                Utility.bigIntegerToBytes(gasPrice), // gas price
-                Utility.bigIntegerToBytes(new BigInteger(approveGasEstimate.substring(2), 16)), // gas limit
-                ByteUtil.hexStringToBytes(tokenAddr), // to id
-                Utility.bigIntegerToBytes(new BigInteger("0", 10)), // value
-                approveFunctionBytes, 42);// chainid
-        senderWallet.signTransaction(approveTrans);
-        String signedApproveTrans = "0x" + new String(org.apache.commons.codec.binary.Hex.encodeHex(approveTrans.getEncoded()));
-        String approveSendRawTransactionString = "{\"method\":\"eth_sendRawTransaction\",\"params\":[\""
-                + signedApproveTrans + "\"],\"id\":42,\"jsonrpc\":\"2.0\"}";
-
-        String myTransactionID1 = "";
-        try {
-            myTransactionID1 = (String) httpAgent.getHttpResponse(approveSendRawTransactionString);
-        } catch (IOException e) {
-            System.out.println("Fail to execute HTTP request.");
-            return;
-        }
-
-        if (!"".equals(myTransactionID1)) {
-            System.out.println("Waiting for Kovan to mine transactions ... ");
-            waitingForTransaction(myTransactionID1);
-        }
-        if (debugInfo) {
-            System.out.println("\bApproving funding transfer is done.");
-        }
         try {
             senderWallet.updateNonce(httpAgent);
         } catch (Exception e) {
@@ -646,7 +566,7 @@ public class MicroRaiden {
         }
 
         if (!"".equals(myTransactionID2)) {
-            String blockNumberHex = waitingForTransaction(myTransactionID2);
+            String blockNumberHex = transactionService.waitingForTransaction(myTransactionID2);
 
             System.out.println("\bChannel has been opened in block " + new BigInteger(blockNumberHex.substring(2), 16).toString(10));
 
@@ -678,15 +598,7 @@ public class MicroRaiden {
      * @param amountOfEther the double literal of Ethers would like to trade for tokens. 0.1 Ether OK for demo.
      */
     public void buyToken(String accountName, String amountOfEther) {
-        BigInteger value;
-        try {
-            value = Utility.decimalToBigInteger(amountOfEther, appendingZerosForETH);
-        } catch (NumberFormatException e) {
-            System.out.println("The provided balance is not valid.");
-            return;
-        }
-
-        Wallet myWallet = null;
+        Wallet myWallet;
         try {
             byte[] myPrivateKey = getPrivateKeyByName(accountName);
             myWallet = new Wallet(myPrivateKey);
@@ -696,122 +608,7 @@ public class MicroRaiden {
             return;
         }
 
-        if (debugInfo) {
-            System.out.println("User " + accountName + "(" + myWallet.getAccountID() + ") will trade " + value.toString() + " Wei to Token.");
-        }
-
-        CallTransaction.Function mint = tokenContract.getByName("mint");
-        byte[] functionBytes = mint.encode();
-        String queryGasString = "{\"method\":\"eth_estimateGas\"," +
-                "\"params\":[" +
-                "{" +
-                "\"from\":\"" + myWallet.getAccountID() + "\"," +
-                "\"to\":\"" + tokenAddr + "\"," +
-                "\"value\":\"" + "0x" + value.toString(16) + "\"," +
-                "\"data\":\"" + "0x" + new String(org.apache.commons.codec.binary.Hex.encodeHex(functionBytes)) + "\"" +
-                "}" +
-                "]," +
-                "\"id\":42,\"jsonrpc\":\"2.0\"}";
-        String gasEstimateResult = "";
-        try {
-            gasEstimateResult = (String) httpAgent.getHttpResponse(queryGasString);
-        } catch (IOException e) {
-            System.out.println("Invoking function with given arguments is not allowed.");
-            return;
-        }
-        if (debugInfo) {
-            System.out.println("The estimatedGas of mint is " + gasEstimateResult);
-        }
-
-        if (debugInfo) {
-            System.out.println("Total ether balance of " + accountName + " is " + myWallet.etherBalance().toString(10));
-        }
-        if (new BigInteger(gasEstimateResult.substring(2), 16).multiply(gasPrice).add(value).compareTo(myWallet.etherBalance()) > 0) {
-            System.out.println("Insufficient Ether to finish the transaction.");
-            return;
-        }
-
-        if (debugInfo) {
-            System.out.println("The nonce of " + accountName + " is " + myWallet.nonce());
-        }
-
-        Transaction t = new Transaction(Utility.bigIntegerToBytes(myWallet.nonce()), // nonce
-                Utility.bigIntegerToBytes(gasPrice), // gas price
-                Utility.bigIntegerToBytes(new BigInteger(gasEstimateResult.substring(2), 16)), // gas limit
-                ByteUtil.hexStringToBytes(tokenAddr), // to id
-                Utility.bigIntegerToBytes(value), // value
-                functionBytes, 42);// chainid
-        myWallet.signTransaction(t);
-        String signedTrans = "0x" + new String(org.apache.commons.codec.binary.Hex.encodeHex(t.getEncoded()));
-        String mintSendRawTransactionString = "{\"method\":\"eth_sendRawTransaction\",\"params\":[\""
-                + signedTrans + "\"],\"id\":42,\"jsonrpc\":\"2.0\"}";
-
-        String myTransactionID = "";
-        try {
-            myTransactionID = (String) httpAgent.getHttpResponse(mintSendRawTransactionString);
-        } catch (IOException e) {
-            System.out.println("Fail to execute HTTP request.");
-            return;
-        }
-
-        if (!"".equals(myTransactionID)) {
-            System.out.println("Waiting for Kovan to mine transactions ... ");
-            waitingForTransaction(myTransactionID);
-        }
-        System.out.println("\bYou have been given 50 tokens.");
-    }
-
-    /**
-     * Waiting for the transaction to get minded
-     *
-     * @param myTransactionID
-     * @return the blockNumber where the transaction is at
-     */
-    private static String waitingForTransaction(String myTransactionID) {
-        if (debugInfo) {
-            System.out.println("Transaction ID = " + myTransactionID);
-        }
-        boolean loop = true;
-        String blockNumber = new String();
-        Object tempObj = null;
-        String queryTransactionString = "{\"method\":\"eth_getTransactionReceipt\"," +
-                "\"params\":[\"" +
-                myTransactionID +
-                "\"]," +
-                "\"id\":42,\"jsonrpc\":\"2.0\"}";
-        while (loop) {
-
-            try {
-                tempObj = httpAgent.getHttpResponse(queryTransactionString);
-            } catch (IOException e) {
-                System.out.println("Fail to execute HTTP request.");
-                return "";
-            }
-            if (tempObj == null) {
-                //do nothing
-            } else {
-                loop = false;
-                JSONObject jsonObject = (JSONObject) tempObj;
-                //The jsonObject can be further parsed to get more information.
-                blockNumber = (String) jsonObject.get("blockNumber");
-            }
-            try {
-                int i = 5;
-                while (i-- > 0) {
-                    Thread.sleep(INTERVAL_CHECK_TRANS_DONE);
-                    System.out.print("\b\\");
-                    Thread.sleep(INTERVAL_CHECK_TRANS_DONE);
-                    System.out.print("\b|");
-                    Thread.sleep(INTERVAL_CHECK_TRANS_DONE);
-                    System.out.print("\b/");
-                    Thread.sleep(INTERVAL_CHECK_TRANS_DONE);
-                    System.out.print("\b-");
-                }
-            } catch (InterruptedException e) {
-
-            }
-        }
-        return blockNumber;
+        token.mint(myWallet, amountOfEther);
     }
 
     /**
@@ -906,11 +703,15 @@ public class MicroRaiden {
         try {
             Object obj = parser.parse(new FileReader("rm-ethereum.conf"));
 
+            String tokenAddr = null;
+			CallTransaction.Contract tokenContract = null;
+			String appendingZerosForTKN = null;
+			String appendingZerosForETH = null;
             JSONObject jsonObject = (JSONObject) obj;
             for (Object key : jsonObject.keySet()) {
                 switch ((String) key) {
                     case "debugInfo":
-                        debugInfo = ((String) jsonObject.get(key)).equals("true") ? true : false;
+                        debugInfo = jsonObject.get(key).equals("true");
                         break;
                     case "gasPrice":
                         gasPrice = new BigInteger((String) jsonObject.get(key), 10);
@@ -937,14 +738,14 @@ public class MicroRaiden {
                         }
                         break;
                     case "channelABI":
-                        channelABI = ((String) jsonObject.get(key));
+						String channelABI = ((String) jsonObject.get(key));
                         if (debugInfo) {
                             System.out.println("channelABI = " + channelABI);
                         }
                         channelContract = new CallTransaction.Contract(channelABI);
                         break;
                     case "tokenABI":
-                        tokenABI = ((String) jsonObject.get(key));
+						String tokenABI = ((String) jsonObject.get(key));
                         if (debugInfo) {
                             System.out.println("tokenABI = " + tokenABI);
                         }
@@ -957,7 +758,7 @@ public class MicroRaiden {
                         }
                         break;
                     case "appendingZerosForTKN":
-                        appendingZerosForTKN = ((String) jsonObject.get(key));
+						appendingZerosForTKN = ((String) jsonObject.get(key));
                         if (debugInfo) {
                             System.out.println("appendingZerosForTKN = " + appendingZerosForTKN);
                         }
@@ -974,6 +775,8 @@ public class MicroRaiden {
                         System.out.println("Unknown key is detected when parsing the configuration files.");
                 }
                 httpAgent = new Http(rpcAddress, debugInfo);
+                transactionService = new TransactionService(httpAgent, debugInfo);
+                token = new Token(tokenContract, tokenAddr, appendingZerosForTKN, appendingZerosForETH, gasPrice, httpAgent, debugInfo);
             }
         } catch (FileNotFoundException e) {
 
