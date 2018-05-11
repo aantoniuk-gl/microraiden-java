@@ -14,7 +14,7 @@ public class Token {
     private final BigInteger gasPrice;
     private final Http httpAgent;
     private final boolean debugInfo;
-    private final TransactionService transactionService;
+    private final TransactionWaiter transactionWaiter;
 
     public Token(CallTransaction.Contract tokenContract, String tokenAddr, String appendingZerosForTKN,
             String appendingZerosForETH, BigInteger gasPrice, Http httpAgent, boolean debugInfo) {
@@ -25,7 +25,7 @@ public class Token {
         this.gasPrice = gasPrice;
         this.httpAgent = httpAgent;
         this.debugInfo = debugInfo;
-        this.transactionService = new TransactionService(httpAgent, debugInfo);
+        this.transactionWaiter = new TransactionWaiter(httpAgent, debugInfo);
     }
 
     public String getAppendingZerosForTKN() {
@@ -131,7 +131,7 @@ public class Token {
 
         if (!"".equals(myTransactionID)) {
             System.out.println("Waiting for Kovan to mine transactions ... ");
-            transactionService.waitingForTransaction(myTransactionID);
+            transactionWaiter.waitingForTransaction(myTransactionID);
         }
         System.out.println("\bYou have been given 50 tokens.");
     }
@@ -193,7 +193,7 @@ public class Token {
 
         if (!"".equals(transactionId)) {
             System.out.println("Waiting for Kovan to mine transactions ... ");
-            transactionService.waitingForTransaction(transactionId);
+            transactionWaiter.waitingForTransaction(transactionId);
         }
         if (debugInfo) {
             System.out.println("\bApproving funding transfer is done.");

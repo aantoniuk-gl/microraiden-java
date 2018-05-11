@@ -6,41 +6,34 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.reflect.Method;
 import java.math.BigInteger;
-import java.util.Arrays;
 
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
 import org.ethereum.core.CallTransaction;
-import org.ethereum.core.Transaction;
 import org.ethereum.crypto.ECKey;
-import org.ethereum.util.ByteUtil;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
-import org.kocakosm.pitaya.security.Digest;
-import org.kocakosm.pitaya.security.Digests;
 
 /*
  * CLI for the MicroRaiden client
  */
 public class MicroRaiden {
 
-    private static final int LENGTH_OF_ID_IN_BYTES = 20;
-
     private static String rpcAddress = null;
     private static String channelAddr = null;
-    private static Token token = null;
     private static String tokenAddr = null;
     private static CallTransaction.Contract tokenContract = null;
-    private static TransactionService transactionService = null;
 
-	private static CallTransaction.Contract channelContract = null;
+    private static CallTransaction.Contract channelContract = null;
     private static BigInteger MAX_DEPOSIT = null;
+    private static String appendingZerosForTKN = null;
+    private static String appendingZerosForETH = null;
     private static BigInteger gasPrice = null;
     private static boolean debugInfo = false;
 
     private static Http httpAgent = null;
-
+    private static Token token = null;
     private static TransferChannel transferChannel = null;
 
     public MicroRaiden() {
@@ -142,255 +135,44 @@ public class MicroRaiden {
     }
 
     /**
-     * This function should be used by sender to create the balance proof hash by using recevier's address,
-     * the block index where the channel has been created,
-     * the balance that the sender would like to pay to the receiver, and the channel address
-     *
-     * @param receiverAddress   account ID of receiver in Hex String with 40 Hex digits, 0x is optional.
-     * @param open_block_number the decimal literal of the open block index.
-     * @param balance           the double literal of real amount of token paying to receiver
-     * @param channelAddress    the channel address in Hex String with 40 Hex digits, 0x is optional.
-     * @return the hash result.
+     * @param accountName the name of the account would like to query.
      */
-    private static byte[] getBalanceMsgHash(String receiverAddress, String open_block_number, String balance, String channelAddress) {
-        byte[] receiverAddressBytes = new byte[0];
-        byte[] channelAddressBytes = new byte[0];
-        byte[] openBlockNumberBytes = new byte[0];
-        byte[] balanceInChannelBytes = new byte[0];
-
-        receiverAddress = receiverAddress.startsWith("0x") ? receiverAddress.substring(2) : receiverAddress;
-        channelAddress = channelAddress.startsWith("0x") ? channelAddress.substring(2) : channelAddress;
+    public void getAccountInfo(String accountName) {
+        Wallet myWallet;
         try {
-            receiverAddressBytes = Hex.decodeHex(receiverAddress.toCharArray());
-        } catch (DecoderException e) {
-            System.out.println("The provided receiver's address is not valid.");
-            return null;
-        }
-        if (receiverAddressBytes.length != LENGTH_OF_ID_IN_BYTES) {
-            System.out.println("The provided receiver's address is not valid.");
-            return null;
-        }
-        try {
-            channelAddressBytes = Hex.decodeHex(channelAddress.toCharArray());
-        } catch (DecoderException e) {
-            System.out.println("The provided channel's address is not valid.");
-            return null;
-        }
-        if (channelAddressBytes.length != LENGTH_OF_ID_IN_BYTES) {
-            System.out.println("The provided channel's address is not valid.");
-            return null;
-        }
-        try {
-            Integer.parseInt(open_block_number);
-        } catch (NumberFormatException e) {
-            System.out.println("The provided open block n is not valid.");
-            return null;
-        }
-
-        BigInteger tempBalance = null;
-        try {
-            tempBalance = Utility.decimalToBigInteger(balance, token.getAppendingZerosForTKN());
-        } catch (NumberFormatException e) {
-            System.out.println("The provided balance is not valid.");
-            return null;
-        }
-
-        try {
-            openBlockNumberBytes = Hex.decodeHex(Utility.prependingZeros(Integer.toHexString(Integer.parseInt(open_block_number)), 8).toCharArray());
-            balanceInChannelBytes = Hex.decodeHex(Utility.prependingZeros(tempBalance.toString(16), 48).toCharArray());
-        } catch (DecoderException e) {
-
-        }
-        byte[] dataTypeName = "string message_idaddress receiveruint32 block_createduint192 balanceaddress contract".getBytes();
-        byte[] dataValue = Utility.concatenateByteArrays("Sender balance proof signature".getBytes(), receiverAddressBytes, openBlockNumberBytes, balanceInChannelBytes, channelAddressBytes);
-        byte[] result = Utility.getSHA3HashHex(Utility.concatenateByteArrays(Utility.getSHA3HashHex(dataTypeName), Utility.getSHA3HashHex(dataValue)));
-        if (debugInfo) {
-            System.out.println("The value to be hashed in getBalanceMessageHash is " + new String(Hex.encodeHexString(Utility.concatenateByteArrays(Utility.getSHA3HashHex(dataTypeName), Utility.getSHA3HashHex(dataValue)))));
-            System.out.println("The result of getBalanceMessageHash is " + new String(Hex.encodeHexString(result)));
-        }
-        return result;
-    }
-
-    /**
-     * This function should be used by receiver to create the closing hash by using sender's address,
-     * the block index where the channel has been created,
-     * the balance that the sender would like to pay to the receiver, and the channel address
-     *
-     * @param senderAddress     account ID of sender in Hex String with 40 Hex digits, 0x is optional.
-     * @param open_block_number the decimal literal of the open block index.
-     * @param balance           the double literal of real amount of token paying to receiver
-     * @param channelAddress    the channel address in Hex String with 40 Hex digits, 0x is optional.
-     * @return the hash result.
-     */
-    private static byte[] getClosingMsgHash(String senderAddress, String open_block_number, String balance, String channelAddress) {
-        byte[] receiverAddressBytes = new byte[0];
-        byte[] channelAddressBytes = new byte[0];
-        byte[] openBlockNumberBytes = new byte[0];
-        byte[] balanceInChannelBytes = new byte[0];
-
-        senderAddress = senderAddress.startsWith("0x") ? senderAddress.substring(2) : senderAddress;
-        channelAddress = channelAddress.startsWith("0x") ? channelAddress.substring(2) : channelAddress;
-        try {
-            receiverAddressBytes = Hex.decodeHex(senderAddress.toCharArray());
-        } catch (DecoderException e) {
-            System.out.println("The provided receiver's address is not valid.");
-            return null;
-        }
-        if (receiverAddressBytes.length != LENGTH_OF_ID_IN_BYTES) {
-            System.out.println("The provided receiver's address is not valid.");
-            return null;
-        }
-        try {
-            channelAddressBytes = Hex.decodeHex(channelAddress.toCharArray());
-        } catch (DecoderException e) {
-            System.out.println("The provided channel's address is not valid.");
-            return null;
-        }
-        if (channelAddressBytes.length != LENGTH_OF_ID_IN_BYTES) {
-            System.out.println("The provided channel's address is not valid.");
-            return null;
-        }
-        try {
-            Integer.parseInt(open_block_number);
-        } catch (NumberFormatException e) {
-            System.out.println("The provided open block n is not valid.");
-            return null;
-        }
-
-        BigInteger tempBalance = null;
-        try {
-            tempBalance = Utility.decimalToBigInteger(balance, token.getAppendingZerosForTKN());
-        } catch (NumberFormatException e) {
-            System.out.println("The provided balance is not valid.");
-            return null;
-        }
-
-        try {
-            openBlockNumberBytes = Hex.decodeHex(Utility.prependingZeros(Integer.toHexString(Integer.parseInt(open_block_number)), 8).toCharArray());
-            balanceInChannelBytes = Hex.decodeHex(Utility.prependingZeros(tempBalance.toString(16), 48).toCharArray());
-        } catch (DecoderException e) {
-
-        }
-        byte[] dataTypeName = "string message_idaddress senderuint32 block_createduint192 balanceaddress contract".getBytes();
-        byte[] dataValue = Utility.concatenateByteArrays("Receiver closing signature".getBytes(), receiverAddressBytes, openBlockNumberBytes, balanceInChannelBytes, channelAddressBytes);
-        byte[] result = Utility.getSHA3HashHex(Utility.concatenateByteArrays(Utility.getSHA3HashHex(dataTypeName), Utility.getSHA3HashHex(dataValue)));
-        if (debugInfo) {
-            System.out.println("The value to be hashed in getClosingMsgHash is " + new String(Hex.encodeHexString(Utility.concatenateByteArrays(Utility.getSHA3HashHex(dataTypeName), Utility.getSHA3HashHex(dataValue)))));
-            System.out.println("The result of getClosingMsgHash is " + new String(Hex.encodeHexString(result)));
-        }
-        return result;
-    }
-
-    /**
-     * This function should be used by receiver to create channel closing signature with
-     * a. sender's address,
-     * b. the block index where the channel has been created,
-     * c. the balance that the receiver would like to receive from sender, and
-     * d. the channel address
-     *
-     * @param senderAddr     account ID of sender in Hex String with 40 Hex digits, 0x is optional.
-     * @param channelAddr    the channel address in Hex String with 40 Hex digits, 0x is optional.
-     * @param openBlockNum   the decimal literal of the block index where the channel was open at.
-     * @param balance        the double literal of real amount of token paying to receiver
-     * @param receiverWallet the receiver's wallet used to sign the signature.
-     * @return the channel closing signature.
-     */
-    private static byte[] getClosingMsgHashSig(String senderAddr, String channelAddr, String openBlockNum, String balance, Wallet receiverWallet) {
-        try {
-            receiverWallet.update(httpAgent);
+            byte[] myPrivateKey = getPrivateKeyByName(accountName);
+            myWallet = new Wallet(myPrivateKey);
+            myWallet.update(httpAgent);
         } catch (Exception e) {
-            return null;
+            System.out.println("Cannot retrive for " + accountName);
+            return;
         }
-        byte[] closingMsgHash = getClosingMsgHash(senderAddr, openBlockNum, balance, channelAddr);
-        if (closingMsgHash == null) {
-            System.out.println("Argument Error.");
-            return null;
-        }
-        byte[] closingMsgHashHex;
-        try {
-            closingMsgHashHex = Hex.decodeHex(new String(Hex.encodeHex(closingMsgHash)).toCharArray());
-        } catch (DecoderException e) {
-            System.out.println("Couldn't convert msgHashHex = 0x" + Hex.encodeHexString(closingMsgHash) + " to byte array.");
-            return null;
-        }
-        return receiverWallet.signMessage(closingMsgHashHex);
+        System.out.println("**********************************************");
+        System.out.println("AccountName:\t" + accountName);
+        System.out.println("AccountID:\t" + myWallet.getAccountID());
+        System.out.println("AccountNonce:\t" + myWallet.nonce().toString(10));
+        System.out.println("AccountBalance:\t" + myWallet.etherBalance().toString(10) + " (Wei)");
+        System.out.println("**********************************************");
     }
 
     /**
-     * This function should be used by sender to create balance proof signature with receiver's address,
-     * the block index where the channel has been created,
-     * the balance that the sender would like to pay to the receiver, and the channel address
+     * Allows user buy some token. If the user has no token, he can only put zero deposit when creating the channel.
      *
-     * @param receiverAddr account ID of receiver in Hex String with 40 Hex digits, 0x is optional.
-     * @param channelAddr  the channel address in Hex String with 40 Hex digits, 0x is optional.
-     * @param openBlockNum the decimal literal of the open block index.
-     * @param balance      the double literal of real amount of token paying to receiver
-     * @param senderWallet the sender's wallet used to sign the signature.
-     * @return the balance proof signature.
+     * @param accountName   the name of the buyer
+     * @param amountOfEther the double literal of Ethers would like to trade for tokens. 0.1 Ether OK for demo.
      */
-    private static byte[] getBalanceMsgHashSig(String receiverAddr, String channelAddr, String openBlockNum, String balance, Wallet senderWallet) {
+    public void buyToken(String accountName, String amountOfEther) {
+        Wallet myWallet;
         try {
-            senderWallet.update(httpAgent);
+            byte[] myPrivateKey = getPrivateKeyByName(accountName);
+            myWallet = new Wallet(myPrivateKey);
+            myWallet.update(httpAgent);
         } catch (Exception e) {
-            return null;
-        }
-
-        byte[] balanceMsgHash = getBalanceMsgHash(receiverAddr, openBlockNum, balance, channelAddr);
-        if (balanceMsgHash == null) {
-            System.out.println("Argument Error.");
-            return null;
-        }
-        byte[] balanceMsgHashHex = null;
-        try {
-            balanceMsgHashHex = Hex.decodeHex(new String(Hex.encodeHex(balanceMsgHash)).toCharArray());
-        } catch (DecoderException e) {
-            System.out.println("Couldn't convert msgHashHex = 0x" + Hex.encodeHexString(balanceMsgHash) + " to byte array.");
-            return null;
-        }
-        return senderWallet.signMessage(balanceMsgHashHex);
-    }
-
-    /**
-     * This function is to close the channel in a cooperative manner.
-     *
-     * @param delegatorName the delegator's name used to retrieve the wallet, as the signer of the channel closing transaction.
-     * @param senderName    the name of sender of this channel
-     * @param receiverName  the name of receiver of this channel
-     * @param openBlockNum  the block index where the channel was open in decimal literal
-     * @param balance       the double literal of the amount of taken paying to the receiver.
-     */
-    public void closeChannelCooperatively(String delegatorName, String senderName, String receiverName, String openBlockNum, String balance) {
-                Wallet delegatorWallet;
-        Wallet senderWallet;
-        Wallet receiverWallet;
-        try {
-            byte[] delegatorPrivateKey = getPrivateKeyByName(delegatorName);
-            delegatorWallet = new Wallet(delegatorPrivateKey);
-
-            byte[] senderPrivateKey = getPrivateKeyByName(senderName);
-            senderWallet = new Wallet(senderPrivateKey);
-
-            byte[] receiverPrivateKey = getPrivateKeyByName(receiverName);
-            receiverWallet = new Wallet(receiverPrivateKey);
-        } catch (Exception e) {
-            System.out.println("The delagator/sender/receiver cannot be found.");
+            System.out.println("Cannot retrive the wallet for " + accountName);
             return;
         }
 
-        System.out.println("User " + delegatorWallet.getAccountID() + " is the delegator to close the channel " +
-                senderName + " ==> " + receiverName + " at balance = " + balance + ".");
-
-
-        byte[] closingMsgHashSig = getClosingMsgHashSig(senderWallet.getAccountID(), channelAddr, openBlockNum, balance, receiverWallet);
-        byte[] balanceMsgHashSig = getBalanceMsgHashSig(receiverWallet.getAccountID(), channelAddr, openBlockNum, balance, senderWallet);
-
-        transferChannel.closeChannelCooperatively(
-                delegatorWallet,
-                receiverWallet.getAccountID(),
-                balanceMsgHashSig,
-                closingMsgHashSig,
-                openBlockNum,
-                balance);
+        token.mint(myWallet, amountOfEther);
     }
 
     public void getTokenBalance(String accountName) {
@@ -432,44 +214,46 @@ public class MicroRaiden {
     }
 
     /**
-     * Allows user buy some token. If the user has no token, he can only put zero deposit when creating the channel.
+     * This function is to close the channel in a cooperative manner.
      *
-     * @param accountName   the name of the buyer
-     * @param amountOfEther the double literal of Ethers would like to trade for tokens. 0.1 Ether OK for demo.
+     * @param delegatorName the delegator's name used to retrieve the wallet, as the signer of the channel closing transaction.
+     * @param senderName    the name of sender of this channel
+     * @param receiverName  the name of receiver of this channel
+     * @param openBlockNum  the block index where the channel was open in decimal literal
+     * @param balance       the double literal of the amount of taken paying to the receiver.
      */
-    public void buyToken(String accountName, String amountOfEther) {
-        Wallet myWallet;
+    public void closeChannelCooperatively(String delegatorName, String senderName, String receiverName, String openBlockNum, String balance) {
+        Wallet delegatorWallet;
+        Wallet senderWallet;
+        Wallet receiverWallet;
         try {
-            byte[] myPrivateKey = getPrivateKeyByName(accountName);
-            myWallet = new Wallet(myPrivateKey);
-            myWallet.update(httpAgent);
+            byte[] delegatorPrivateKey = getPrivateKeyByName(delegatorName);
+            delegatorWallet = new Wallet(delegatorPrivateKey);
+
+            byte[] senderPrivateKey = getPrivateKeyByName(senderName);
+            senderWallet = new Wallet(senderPrivateKey);
+
+            byte[] receiverPrivateKey = getPrivateKeyByName(receiverName);
+            receiverWallet = new Wallet(receiverPrivateKey);
         } catch (Exception e) {
-            System.out.println("Cannot retrive the wallet for " + accountName);
+            System.out.println("The delagator/sender/receiver cannot be found.");
             return;
         }
 
-        token.mint(myWallet, amountOfEther);
-    }
+        System.out.println("User " + delegatorWallet.getAccountID() + " is the delegator to close the channel " +
+                senderName + " ==> " + receiverName + " at balance = " + balance + ".");
 
-    /**
-     * @param accountName the name of the account would like to query.
-     */
-    public void getAccountInfo(String accountName) {
-        Wallet myWallet;
-        try {
-            byte[] myPrivateKey = getPrivateKeyByName(accountName);
-            myWallet = new Wallet(myPrivateKey);
-            myWallet.update(httpAgent);
-        } catch (Exception e) {
-            System.out.println("Cannot retrive for " + accountName);
-            return;
-        }
-        System.out.println("**********************************************");
-        System.out.println("AccountName:\t" + accountName);
-        System.out.println("AccountID:\t" + myWallet.getAccountID());
-        System.out.println("AccountNonce:\t" + myWallet.nonce().toString(10));
-        System.out.println("AccountBalance:\t" + myWallet.etherBalance().toString(10) + " (Wei)");
-        System.out.println("**********************************************");
+        Signer signer = new Signer(appendingZerosForTKN, httpAgent, debugInfo);
+        byte[] balanceMsgHashSig = signer.genBalanceMsgHashSig(senderWallet, receiverWallet.getAccountID(), channelAddr, openBlockNum, balance);
+        byte[] closingMsgHashSig = signer.genClosingMsgHashSig(receiverWallet, senderWallet.getAccountID(), channelAddr, openBlockNum, balance);
+
+        transferChannel.closeChannelCooperatively(
+                delegatorWallet,
+                receiverWallet.getAccountID(),
+                balanceMsgHashSig,
+                closingMsgHashSig,
+                openBlockNum,
+                balance);
     }
 
     /**
@@ -515,8 +299,8 @@ public class MicroRaiden {
                     || m.getName().equals("displayFunctions")
                     || m.getName().equals("getECKeyByName")
                     || m.getName().equals("waitingForTransaction")
-                    || m.getName().equals("getBalanceMsgHashSig")
-                    || m.getName().equals("getClosingMsgHashSig")
+                    || m.getName().equals("genBalanceMsgHashSig")
+                    || m.getName().equals("genClosingMsgHashSig")
                     || m.getName().equals("getClosingMsgHash")
                     || m.getName().equals("getBalanceMsgHash")) {
                 continue;
@@ -543,8 +327,6 @@ public class MicroRaiden {
         try {
             Object obj = parser.parse(new FileReader("rm-ethereum.conf"));
 
-			String appendingZerosForTKN = null;
-			String appendingZerosForETH = null;
             JSONObject jsonObject = (JSONObject) obj;
             for (Object key : jsonObject.keySet()) {
                 switch ((String) key) {
@@ -576,14 +358,14 @@ public class MicroRaiden {
                         }
                         break;
                     case "channelABI":
-						String channelABI = ((String) jsonObject.get(key));
+                        String channelABI = ((String) jsonObject.get(key));
                         if (debugInfo) {
                             System.out.println("channelABI = " + channelABI);
                         }
                         channelContract = new CallTransaction.Contract(channelABI);
                         break;
                     case "tokenABI":
-						String tokenABI = ((String) jsonObject.get(key));
+                        String tokenABI = ((String) jsonObject.get(key));
                         if (debugInfo) {
                             System.out.println("tokenABI = " + tokenABI);
                         }
@@ -596,7 +378,7 @@ public class MicroRaiden {
                         }
                         break;
                     case "appendingZerosForTKN":
-						appendingZerosForTKN = ((String) jsonObject.get(key));
+                        appendingZerosForTKN = ((String) jsonObject.get(key));
                         if (debugInfo) {
                             System.out.println("appendingZerosForTKN = " + appendingZerosForTKN);
                         }
@@ -613,11 +395,8 @@ public class MicroRaiden {
                         System.out.println("Unknown key is detected when parsing the configuration files.");
                 }
                 httpAgent = new Http(rpcAddress, debugInfo);
-                transactionService = new TransactionService(httpAgent, debugInfo);
-                token = new Token(tokenContract, tokenAddr, appendingZerosForTKN, appendingZerosForETH, gasPrice,
-                        httpAgent, debugInfo);
-                transferChannel = new TransferChannel(channelAddr, channelContract, MAX_DEPOSIT, token, transactionService,
-                        httpAgent, debugInfo);
+                token = new Token(tokenContract, tokenAddr, appendingZerosForTKN, appendingZerosForETH, gasPrice, httpAgent, debugInfo);
+                transferChannel = new TransferChannel(channelAddr, channelContract, MAX_DEPOSIT, token, httpAgent, debugInfo);
             }
         } catch (FileNotFoundException e) {
 

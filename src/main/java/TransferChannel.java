@@ -17,17 +17,17 @@ public class TransferChannel {
     private final BigInteger maxDeposit;
     private final Token token;
     private final BigInteger gasPrice = null;
-    private final TransactionService transactionService;
+    private final TransactionWaiter transactionWaiter;
     private final Http http;
     private final boolean debugInfo;
 
     public TransferChannel(String channelAddr, CallTransaction.Contract channelContract, BigInteger maxDeposit,
-            Token token, TransactionService transactionService, Http http, boolean debugInfo) {
+            Token token, Http http, boolean debugInfo) {
         this.channelAddr = channelAddr;
         this.channelContract = channelContract;
         this.maxDeposit = maxDeposit;
         this.token = token;
-        this.transactionService = transactionService;
+        this.transactionWaiter = new TransactionWaiter(http, debugInfo);
         this.http = http;
         this.debugInfo = debugInfo;
     }
@@ -121,7 +121,7 @@ public class TransferChannel {
         }
 
         if (!"".equals(myTransactionID2)) {
-            String blockNumberHex = transactionService.waitingForTransaction(myTransactionID2);
+            String blockNumberHex = transactionWaiter.waitingForTransaction(myTransactionID2);
             String blockNumber = new BigInteger(blockNumberHex.substring(2), 16).toString(10);
 
             System.out.println("\bChannel has been opened in block " + blockNumber);
@@ -253,7 +253,7 @@ public class TransferChannel {
 
         if (!"".equals(transactionid)) {
             System.out.println("Waiting for Kovan to mine transactions ... ");
-            transactionService.waitingForTransaction(transactionid);
+            transactionWaiter.waitingForTransaction(transactionid);
         }
         System.out.println("\bChannel has been closed.");
     }

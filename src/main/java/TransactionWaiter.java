@@ -2,13 +2,13 @@ import java.io.IOException;
 
 import org.json.simple.JSONObject;
 
-public class TransactionService {
+public class TransactionWaiter {
     private static final int INTERVAL_CHECK_TRANS_DONE = 100;
 
     private final Http httpAgent;
     private final boolean debugInfo;
 
-    public TransactionService(Http httpAgent, boolean debugInfo) {
+    public TransactionWaiter(Http httpAgent, boolean debugInfo) {
         this.httpAgent = httpAgent;
         this.debugInfo = debugInfo;
     }
@@ -21,7 +21,7 @@ public class TransactionService {
      */
     public String waitingForTransaction(String transactionID) {
         if (debugInfo) {
-            System.out.println("TransactionService ID = " + transactionID);
+            System.out.println("TransactionWaiter ID = " + transactionID);
         }
         boolean loop = true;
         String blockNumber = "";
