@@ -32,7 +32,6 @@ public class Token {
         return appendingZerosForTKN;
     }
 
-
     public String balanceOf(String accountId) {
 
         CallTransaction.Function balanceOf = tokenContract.getByName("balanceOf");
@@ -137,13 +136,17 @@ public class Token {
         System.out.println("\bYou have been given 50 tokens.");
     }
 
-    public boolean approve(String channelAddr, Wallet senderWallet, String receiverAccountId, BigInteger deposit) {
-
-        System.out.println("User " + senderWallet.getAccountID() + " tries to open a channel to pay " +
-                receiverAccountId + " up to " + deposit + " Tokens at maximum.");
+    /**
+     * Approve sender to transfer some amount of tokens to any address.
+     * @param channelAddr
+     * @param senderWallet
+     * @param amount
+     * @return true if is approved, false if not
+     */
+    public boolean approve(String channelAddr, Wallet senderWallet, BigInteger amount) {
 
         CallTransaction.Function approve = tokenContract.getByName("approve");
-        byte[] approveFunctionBytes = approve.encode(channelAddr, deposit);
+        byte[] approveFunctionBytes = approve.encode(channelAddr, amount);
         String queryApproveGasString = "{\"method\":\"eth_estimateGas\"," +
                 "\"params\":[" +
                 "{" +
@@ -157,7 +160,7 @@ public class Token {
         if (debugInfo) {
             System.out.println("The request string of queryApproveGasString is " + queryApproveGasString);
         }
-        String approveGasEstimate = "";
+        String approveGasEstimate;
         try {
             approveGasEstimate = (String) httpAgent.getHttpResponse(queryApproveGasString);
         } catch (IOException e) {
@@ -180,17 +183,17 @@ public class Token {
         String approveSendRawTransactionString = "{\"method\":\"eth_sendRawTransaction\",\"params\":[\""
                 + signedApproveTrans + "\"],\"id\":42,\"jsonrpc\":\"2.0\"}";
 
-        String myTransactionID1;
+        String transactionId;
         try {
-            myTransactionID1 = (String) httpAgent.getHttpResponse(approveSendRawTransactionString);
+            transactionId = (String) httpAgent.getHttpResponse(approveSendRawTransactionString);
         } catch (IOException e) {
             System.out.println("Fail to execute HTTP request.");
             return false;
         }
 
-        if (!"".equals(myTransactionID1)) {
+        if (!"".equals(transactionId)) {
             System.out.println("Waiting for Kovan to mine transactions ... ");
-            transactionService.waitingForTransaction(myTransactionID1);
+            transactionService.waitingForTransaction(transactionId);
         }
         if (debugInfo) {
             System.out.println("\bApproving funding transfer is done.");

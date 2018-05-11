@@ -30,6 +30,8 @@ public class MicroRaiden {
     private static String rpcAddress = null;
     private static String channelAddr = null;
     private static Token token = null;
+    private static String tokenAddr = null;
+    private static CallTransaction.Contract tokenContract = null;
     private static TransactionService transactionService = null;
 
 	private static CallTransaction.Contract channelContract = null;
@@ -38,6 +40,8 @@ public class MicroRaiden {
     private static boolean debugInfo = false;
 
     private static Http httpAgent = null;
+
+    private static TransferChannel transferChannel = null;
 
     public MicroRaiden() {
         //should probably create an eth account with priv / pub keys
@@ -356,107 +360,37 @@ public class MicroRaiden {
      * @param balance       the double literal of the amount of taken paying to the receiver.
      */
     public void closeChannelCooperatively(String delegatorName, String senderName, String receiverName, String openBlockNum, String balance) {
-        BigInteger tempBalance;
-        try {
-            tempBalance = Utility.decimalToBigInteger(balance, token.getAppendingZerosForTKN());
-        } catch (NumberFormatException e) {
-            System.out.println("The provided balance is not valid.");
-            return;
-        }
-        Wallet delegatorWallet;
+                Wallet delegatorWallet;
         Wallet senderWallet;
         Wallet receiverWallet;
         try {
             byte[] delegatorPrivateKey = getPrivateKeyByName(delegatorName);
             delegatorWallet = new Wallet(delegatorPrivateKey);
-            delegatorWallet.update(httpAgent);
 
             byte[] senderPrivateKey = getPrivateKeyByName(senderName);
             senderWallet = new Wallet(senderPrivateKey);
-            senderWallet.update(httpAgent);
 
             byte[] receiverPrivateKey = getPrivateKeyByName(receiverName);
             receiverWallet = new Wallet(receiverPrivateKey);
-            receiverWallet.update(httpAgent);
         } catch (Exception e) {
             System.out.println("The delagator/sender/receiver cannot be found.");
             return;
         }
 
-        byte[] closing_Msg_Hash_Sig = getClosingMsgHashSig(senderWallet.getAccountID(), channelAddr, openBlockNum, balance, receiverWallet);
-        byte[] balance_Msg_Hash_Sig = getBalanceMsgHashSig(receiverWallet.getAccountID(), channelAddr, openBlockNum, balance, senderWallet);
-        if (closing_Msg_Hash_Sig == null || balance_Msg_Hash_Sig == null) {
-            System.out.println("Argument Error!");
-            return;
-        }
-        if (debugInfo) {
-            System.out.println("The signed closingMsgHash is 0x" + Hex.encodeHexString(closing_Msg_Hash_Sig));
-            System.out.println("The signed balanceMsgHash is 0x" + Hex.encodeHexString(balance_Msg_Hash_Sig));
-        }
-        byte[] balance_Msg_Hash_Sig_r = Arrays.copyOfRange(balance_Msg_Hash_Sig, 0, 32);
-        byte[] balance_Msg_Hash_Sig_s = Arrays.copyOfRange(balance_Msg_Hash_Sig, 32, 64);
-        byte[] balance_Msg_Hash_Sig_v = Arrays.copyOfRange(balance_Msg_Hash_Sig, 64, 65);
-        byte[] closing_Msg_Hash_Sig_r = Arrays.copyOfRange(closing_Msg_Hash_Sig, 0, 32);
-        byte[] closing_Msg_Hash_Sig_s = Arrays.copyOfRange(closing_Msg_Hash_Sig, 32, 64);
-        byte[] closing_Msg_Hash_Sig_v = Arrays.copyOfRange(closing_Msg_Hash_Sig, 64, 65);
+        System.out.println("User " + delegatorWallet.getAccountID() + " is the delegator to close the channel " +
+                senderName + " ==> " + receiverName + " at balance = " + balance + ".");
 
-        //if(debugInfo) {
-        System.out.println("User " + delegatorName + " is the delegator to close the channel " + senderName + " ==> " + receiverName + " at balance = " + balance + ".");
-        //}
 
-        CallTransaction.Function cooperativeClose = channelContract.getByName("cooperativeClose");
-        byte[] cooperativeCloseFunctionBytes = cooperativeClose.encode(receiverWallet.getAccountID(),
-                new BigInteger(openBlockNum, 10), tempBalance, balance_Msg_Hash_Sig_r, balance_Msg_Hash_Sig_s, new BigInteger(balance_Msg_Hash_Sig_v), closing_Msg_Hash_Sig_r, closing_Msg_Hash_Sig_s, new BigInteger(closing_Msg_Hash_Sig_v));
-        String querycooperativeCloseGasString = "{\"method\":\"eth_estimateGas\"," +
-                "\"params\":[" +
-                "{" +
-                "\"from\":\"" + delegatorWallet.getAccountID() + "\"," +
-                "\"to\":\"" + channelAddr + "\"," +
-                "\"value\":\"" + "0x" + new BigInteger("0", 10).toString(16) + "\"," +
-                "\"data\":\"" + "0x" + new String(org.apache.commons.codec.binary.Hex.encodeHex(cooperativeCloseFunctionBytes)) + "\"" +
-                "}" +
-                "]," +
-                "\"id\":42,\"jsonrpc\":\"2.0\"}";
-        if (debugInfo) {
-            System.out.println("The request string of querycooperativeCloseGasString is " + querycooperativeCloseGasString);
-        }
-        String cooperativeCloseGasEstimate;
-        try {
-            cooperativeCloseGasEstimate = (String) httpAgent.getHttpResponse(querycooperativeCloseGasString);
-        } catch (IOException e) {
-            System.out.println("Invoking function with given arguments is not allowed.");
-            return;
-        }
-        if (debugInfo) {
-            System.out.println("The estimatedGas of cooperative channel closing is " + cooperativeCloseGasEstimate + ".");
-        }
+        byte[] closingMsgHashSig = getClosingMsgHashSig(senderWallet.getAccountID(), channelAddr, openBlockNum, balance, receiverWallet);
+        byte[] balanceMsgHashSig = getBalanceMsgHashSig(receiverWallet.getAccountID(), channelAddr, openBlockNum, balance, senderWallet);
 
-        Transaction cooperativeCloseTrans = new Transaction(Utility.bigIntegerToBytes(delegatorWallet.nonce()), // nonce
-                Utility.bigIntegerToBytes(gasPrice), // gas price
-                Utility.bigIntegerToBytes(new BigInteger(cooperativeCloseGasEstimate.substring(2), 16)), // gas limit
-                ByteUtil.hexStringToBytes(channelAddr), // to id
-                Utility.bigIntegerToBytes(new BigInteger("0", 10)), // value
-                cooperativeCloseFunctionBytes, 42);// chainid
-        delegatorWallet.signTransaction(cooperativeCloseTrans);
-        String signedCooperativeCloseTranss = "0x" + new String(org.apache.commons.codec.binary.Hex.encodeHex(cooperativeCloseTrans.getEncoded()));
-        String cooperativeCloseSendRawTransactionString = "{\"method\":\"eth_sendRawTransaction\",\"params\":[\""
-                + signedCooperativeCloseTranss + "\"],\"id\":42,\"jsonrpc\":\"2.0\"}";
-
-        String myTransactionID;
-        try {
-            myTransactionID = (String) httpAgent.getHttpResponse(cooperativeCloseSendRawTransactionString);
-        } catch (IOException e) {
-            System.out.println("Fail to execute HTTP request.");
-            return;
-        }
-
-        if (!"".equals(myTransactionID)) {
-            System.out.println("Waiting for Kovan to mine transactions ... ");
-            transactionService.waitingForTransaction(myTransactionID);
-        }
-        //if(debugInfo) {
-        System.out.println("\bChannel has been closed.");
-        //}	
+        transferChannel.closeChannelCooperatively(
+                delegatorWallet,
+                receiverWallet.getAccountID(),
+                balanceMsgHashSig,
+                closingMsgHashSig,
+                openBlockNum,
+                balance);
     }
 
     public void getTokenBalance(String accountName) {
@@ -481,114 +415,20 @@ public class MicroRaiden {
      * @param deposit             the double literal as the initial deposit of the channel.
      */
     public void createChannel(String senderAccountName, String receiverAccountName, String deposit) {
-        BigInteger initDeposit;
-        try {
-            initDeposit = Utility.decimalToBigInteger(deposit, token.getAppendingZerosForTKN());
-        } catch (NumberFormatException e) {
-            System.out.println("The provided balance is not valid.");
-            return;
-        }
-        if (MAX_DEPOSIT.compareTo(initDeposit) < 0) {
-            System.out.println("Please choose a deposit <= " + MAX_DEPOSIT.toString(10));
-            return;
-        }
         Wallet senderWallet;
         Wallet receiverWallet;
         try {
             byte[] senderPrivateKey = getPrivateKeyByName(senderAccountName);
             senderWallet = new Wallet(senderPrivateKey);
-            senderWallet.update(httpAgent);
 
             byte[] receiverPrivateKey = getPrivateKeyByName(receiverAccountName);
             receiverWallet = new Wallet(receiverPrivateKey);
-//            receiverWallet.update(httpAgent);
         } catch (Exception e) {
             System.out.println("The sender/receiver cannot be found.");
             return;
         }
 
-        boolean approve = token.approve(channelAddr, senderWallet, receiverWallet.getAccountID(), initDeposit);
-        if (!approve) return;
-
-        try {
-            senderWallet.updateNonce(httpAgent);
-        } catch (Exception e) {
-            System.out.println("Updating nonce value is failed.");
-            return;
-        }
-        if (debugInfo) {
-            System.out.println("The nonce of " + senderAccountName + " is " + senderWallet.nonce().toString(10));
-        }
-
-        CallTransaction.Function createChannelERC20 = channelContract.getByName("createChannelERC20");
-        byte[] createChannelERC20FunctionBytes = createChannelERC20.encode(receiverWallet.getAccountID(), initDeposit);
-        String queryCreatChannelGasString = "{\"method\":\"eth_estimateGas\"," +
-                "\"params\":[" +
-                "{" +
-                "\"from\":\"" + senderWallet.getAccountID() + "\"," +
-                "\"to\":\"" + channelAddr + "\"," +
-                "\"value\":\"" + "0x" + new BigInteger("0", 10).toString(16) + "\"," +
-                "\"data\":\"" + "0x" + new String(org.apache.commons.codec.binary.Hex.encodeHex(createChannelERC20FunctionBytes)) + "\"" +
-                "}" +
-                "]," +
-                "\"id\":42,\"jsonrpc\":\"2.0\"}";
-        if (debugInfo) {
-            System.out.println("The request string of queryCreatChannelGasString is " + queryCreatChannelGasString);
-        }
-        String creatChannelGasEstimate = "";
-        try {
-            creatChannelGasEstimate = (String) httpAgent.getHttpResponse(queryCreatChannelGasString);
-        } catch (IOException e) {
-            System.out.println("Invoking function with given arguments is not allowed.");
-            return;
-        }
-
-        if (debugInfo) {
-            System.out.println("The estimatedGas of createChannelERC20 is " + creatChannelGasEstimate);
-        }
-        Transaction createTrans = new Transaction(Utility.bigIntegerToBytes(senderWallet.nonce()), // nonce
-                Utility.bigIntegerToBytes(gasPrice), // gas price
-                Utility.bigIntegerToBytes(new BigInteger(creatChannelGasEstimate.substring(2), 16)), // gas limit
-                ByteUtil.hexStringToBytes(channelAddr), // to id
-                Utility.bigIntegerToBytes(new BigInteger("0", 10)), // value
-                createChannelERC20FunctionBytes, 42);// chainid
-        senderWallet.signTransaction(createTrans);
-        String signedChannelCreationTrans = "0x" + new String(org.apache.commons.codec.binary.Hex.encodeHex(createTrans.getEncoded()));
-        String createChannelSendRawTransactionString = "{\"method\":\"eth_sendRawTransaction\",\"params\":[\""
-                + signedChannelCreationTrans + "\"],\"id\":42,\"jsonrpc\":\"2.0\"}";
-
-        String myTransactionID2 = "";
-        try {
-            myTransactionID2 = (String) httpAgent.getHttpResponse(createChannelSendRawTransactionString);
-        } catch (IOException e) {
-            System.out.println("Fail to execute HTTP request.");
-            return;
-        }
-
-        if (!"".equals(myTransactionID2)) {
-            String blockNumberHex = transactionService.waitingForTransaction(myTransactionID2);
-
-            System.out.println("\bChannel has been opened in block " + new BigInteger(blockNumberHex.substring(2), 16).toString(10));
-
-            Digest keccak256 = Digests.keccak256();
-
-            String firstArgVal = senderWallet.getAccountID().substring(2).toLowerCase();
-            String secondArgVal = receiverWallet.getAccountID().substring(2).toLowerCase();
-            String thirdArgVal = Utility.prependingZeros(blockNumberHex.substring(2), 8);
-            try {
-                byte[] data = Utility.concatenateByteArrays(Hex.decodeHex(firstArgVal.toCharArray()), Hex.decodeHex(secondArgVal.toCharArray()), Hex.decodeHex(thirdArgVal.toCharArray()));
-                if (debugInfo) {
-                    System.out.println("The keccak256 argument of bytes in string " + Hex.encodeHexString(data));
-                }
-                byte[] keyInBytes = keccak256.reset().update(data).digest();
-                String channelKeyHex = "0x" + new String(Hex.encodeHexString(keyInBytes));
-                System.out.println("\bChannel key = " + channelKeyHex);
-                System.out.println("Channel on Koven can be found on page:\nhttps://kovan.etherscan.io/address/" + channelAddr + "#readContract");
-            } catch (DecoderException e) {
-                System.out.println("Hex string cannot be converted to byte array!");
-            }
-        }
-        return;
+        transferChannel.createChannel(senderWallet, receiverWallet.getAccountID(), deposit);
     }
 
     /**
@@ -703,8 +543,6 @@ public class MicroRaiden {
         try {
             Object obj = parser.parse(new FileReader("rm-ethereum.conf"));
 
-            String tokenAddr = null;
-			CallTransaction.Contract tokenContract = null;
 			String appendingZerosForTKN = null;
 			String appendingZerosForETH = null;
             JSONObject jsonObject = (JSONObject) obj;
@@ -776,7 +614,10 @@ public class MicroRaiden {
                 }
                 httpAgent = new Http(rpcAddress, debugInfo);
                 transactionService = new TransactionService(httpAgent, debugInfo);
-                token = new Token(tokenContract, tokenAddr, appendingZerosForTKN, appendingZerosForETH, gasPrice, httpAgent, debugInfo);
+                token = new Token(tokenContract, tokenAddr, appendingZerosForTKN, appendingZerosForETH, gasPrice,
+                        httpAgent, debugInfo);
+                transferChannel = new TransferChannel(channelAddr, channelContract, MAX_DEPOSIT, token, transactionService,
+                        httpAgent, debugInfo);
             }
         } catch (FileNotFoundException e) {
 
