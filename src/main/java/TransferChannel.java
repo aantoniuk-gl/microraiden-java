@@ -16,17 +16,18 @@ public class TransferChannel {
     private final CallTransaction.Contract channelContract;
     private final BigInteger maxDeposit;
     private final Token token;
-    private final BigInteger gasPrice = null;
+    private final BigInteger gasPrice;
     private final TransactionWaiter transactionWaiter;
     private final Http http;
     private final boolean debugInfo;
 
     public TransferChannel(String channelAddr, CallTransaction.Contract channelContract, BigInteger maxDeposit,
-            Token token, Http http, boolean debugInfo) {
+            Token token, BigInteger gasPrice, Http http, boolean debugInfo) {
         this.channelAddr = channelAddr;
         this.channelContract = channelContract;
         this.maxDeposit = maxDeposit;
         this.token = token;
+        this.gasPrice = gasPrice;
         this.transactionWaiter = new TransactionWaiter(http, debugInfo);
         this.http = http;
         this.debugInfo = debugInfo;
@@ -38,6 +39,7 @@ public class TransferChannel {
      * @param senderWallet      the wallet of the sender
      * @param receiverAccountId account id the receiver
      * @param deposit           the double literal as the initial deposit of the channel.
+     * @return String           the blockNumber which channel has been opened
      */
     public String createChannel(Wallet senderWallet, String receiverAccountId, String deposit) {
         BigInteger initDeposit;
@@ -112,16 +114,16 @@ public class TransferChannel {
         String createChannelSendRawTransactionString = "{\"method\":\"eth_sendRawTransaction\",\"params\":[\""
                 + signedChannelCreationTrans + "\"],\"id\":42,\"jsonrpc\":\"2.0\"}";
 
-        String myTransactionID2;
+        String transactionId;
         try {
-            myTransactionID2 = (String) http.getHttpResponse(createChannelSendRawTransactionString);
+            transactionId = (String) http.getHttpResponse(createChannelSendRawTransactionString);
         } catch (IOException e) {
             System.out.println("Fail to execute HTTP request.");
             return null;
         }
 
-        if (!"".equals(myTransactionID2)) {
-            String blockNumberHex = transactionWaiter.waitingForTransaction(myTransactionID2);
+        if (!"".equals(transactionId)) {
+            String blockNumberHex = transactionWaiter.waitingForTransaction(transactionId);
             String blockNumber = new BigInteger(blockNumberHex.substring(2), 16).toString(10);
 
             System.out.println("\bChannel has been opened in block " + blockNumber);
@@ -159,8 +161,9 @@ public class TransferChannel {
      * @param closingMsgHashSig  signed closing message by receiver
      * @param openBlockNum       the block index where the channel was open in decimal literal
      * @param balance            the double literal of the amount of taken paying to the receiver.
+     * @return boolean           true if channel was closed correctly, false if not
      */
-    public void closeChannelCooperatively(Wallet delegatorWallet,
+    public boolean closeChannelCooperatively(Wallet delegatorWallet,
             String receiverAccountId,
             byte[] balanceMsgHashSig,
             byte[] closingMsgHashSig,
@@ -168,7 +171,7 @@ public class TransferChannel {
 
         if (closingMsgHashSig == null || balanceMsgHashSig == null) {
             System.out.println("Argument Error!");
-            return;
+            return false;
         }
 
         BigInteger tempBalance;
@@ -176,14 +179,14 @@ public class TransferChannel {
             tempBalance = Utility.decimalToBigInteger(balance, token.getAppendingZerosForTKN());
         } catch (NumberFormatException e) {
             System.out.println("The provided balance is not valid.");
-            return;
+            return false;
         }
 
         try {
             delegatorWallet.update(http);
         } catch (Exception e) {
             System.out.println("The receiver cannot be found.");
-            return;
+            return false;
         }
 
         if (debugInfo) {
@@ -226,7 +229,7 @@ public class TransferChannel {
             cooperativeCloseGasEstimate = (String) http.getHttpResponse(querycooperativeCloseGasString);
         } catch (IOException e) {
             System.out.println("Invoking function with given arguments is not allowed.");
-            return;
+            return false;
         }
         if (debugInfo) {
             System.out.println("The estimatedGas of cooperative channel closing is " + cooperativeCloseGasEstimate + ".");
@@ -248,7 +251,7 @@ public class TransferChannel {
             transactionid = (String) http.getHttpResponse(cooperativeCloseSendRawTransactionString);
         } catch (IOException e) {
             System.out.println("Fail to execute HTTP request.");
-            return;
+            return false;
         }
 
         if (!"".equals(transactionid)) {
@@ -256,5 +259,6 @@ public class TransferChannel {
             transactionWaiter.waitingForTransaction(transactionid);
         }
         System.out.println("\bChannel has been closed.");
+        return true;
     }
 }

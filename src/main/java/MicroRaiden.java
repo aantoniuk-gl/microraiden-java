@@ -243,9 +243,9 @@ public class MicroRaiden {
         System.out.println("User " + delegatorWallet.getAccountID() + " is the delegator to close the channel " +
                 senderName + " ==> " + receiverName + " at balance = " + balance + ".");
 
-        Signer signer = new Signer(appendingZerosForTKN, httpAgent, debugInfo);
-        byte[] balanceMsgHashSig = signer.genBalanceMsgHashSig(senderWallet, receiverWallet.getAccountID(), channelAddr, openBlockNum, balance);
-        byte[] closingMsgHashSig = signer.genClosingMsgHashSig(receiverWallet, senderWallet.getAccountID(), channelAddr, openBlockNum, balance);
+        MessageSigner messageSigner = new MessageSigner(appendingZerosForTKN, httpAgent, debugInfo);
+        byte[] balanceMsgHashSig = messageSigner.genBalanceMsgHashSig(senderWallet, receiverWallet.getAccountID(), channelAddr, openBlockNum, balance);
+        byte[] closingMsgHashSig = messageSigner.genClosingMsgHashSig(receiverWallet, senderWallet.getAccountID(), channelAddr, openBlockNum, balance);
 
         transferChannel.closeChannelCooperatively(
                 delegatorWallet,
@@ -396,7 +396,7 @@ public class MicroRaiden {
                 }
                 httpAgent = new Http(rpcAddress, debugInfo);
                 token = new Token(tokenContract, tokenAddr, appendingZerosForTKN, appendingZerosForETH, gasPrice, httpAgent, debugInfo);
-                transferChannel = new TransferChannel(channelAddr, channelContract, MAX_DEPOSIT, token, httpAgent, debugInfo);
+                transferChannel = new TransferChannel(channelAddr, channelContract, MAX_DEPOSIT, token, gasPrice, httpAgent, debugInfo);
             }
         } catch (FileNotFoundException e) {
 

@@ -3,7 +3,7 @@ import java.math.BigInteger;
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
 
-public class Signer {
+public class MessageSigner {
 
     private static final byte[] RECEIVER_DATA_TYPE_NAME = "string message_idaddress receiveruint32 block_createduint192 balanceaddress contract".getBytes();
     private static final byte[] BALANCE_PROOF_SIGN = "Sender balance proof signature".getBytes();
@@ -15,13 +15,13 @@ public class Signer {
     private final boolean debugInfo;
 
     /**
-     * Create a signer
+     * Create a MessageSigner
      *
      * @param appendingZerosForTKN
      * @param http
      * @param debugInfo
      */
-    public Signer(String appendingZerosForTKN, Http http, boolean debugInfo) {
+    public MessageSigner(String appendingZerosForTKN, Http http, boolean debugInfo) {
         this.appendingZerosForTKN = appendingZerosForTKN;
         this.http = http;
         this.debugInfo = debugInfo;
@@ -72,24 +72,24 @@ public class Signer {
         } catch (Exception e) {
             return null;
         }
-        byte[] closingMsgHash = genMsgHash(targetAddr, openBlockNum, balance, channelAddr, dataTypeName, signType);
-        if (closingMsgHash == null) {
+        byte[] genMsgHash = genMsgHash(targetAddr, openBlockNum, balance, channelAddr, dataTypeName, signType);
+        if (genMsgHash == null) {
             System.out.println("Argument Error.");
             return null;
         }
-        byte[] closingMsgHashHex;
+        byte[] msgHashHex;
         try {
-            closingMsgHashHex = Hex.decodeHex(new String(Hex.encodeHex(closingMsgHash)).toCharArray());
+            msgHashHex = Hex.decodeHex(new String(Hex.encodeHex(genMsgHash)).toCharArray());
         } catch (DecoderException e) {
-            System.out.println("Couldn't convert msgHashHex = 0x" + Hex.encodeHexString(closingMsgHash) + " to byte array.");
+            System.out.println("Couldn't convert msgHashHex = 0x" + Hex.encodeHexString(genMsgHash) + " to byte array.");
             return null;
         }
-        return signerWallet.signMessage(closingMsgHashHex);
+        return signerWallet.signMessage(msgHashHex);
     }
 
     private byte[] genMsgHash(
             String targetAddress,
-            String open_block_number,
+            String openBlockNumber,
             String balance,
             String channelAddress,
             byte[] dataTypeName,
@@ -114,7 +114,7 @@ public class Signer {
             return null;
         }
         try {
-            Integer.parseInt(open_block_number);
+            Integer.parseInt(openBlockNumber);
         } catch (NumberFormatException e) {
             System.out.println("The provided open block n is not valid.");
             return null;
@@ -130,7 +130,7 @@ public class Signer {
 
         try {
             openBlockNumberBytes = Hex.decodeHex(
-                    Utility.prependingZeros(Integer.toHexString(Integer.parseInt(open_block_number)), 8).toCharArray());
+                    Utility.prependingZeros(Integer.toHexString(Integer.parseInt(openBlockNumber)), 8).toCharArray());
             balanceInChannelBytes = Hex.decodeHex(
                     Utility.prependingZeros(tempBalance.toString(16), 48).toCharArray());
         } catch (DecoderException e) {
@@ -146,9 +146,9 @@ public class Signer {
         byte[] result = Utility.getSHA3HashHex(
                 Utility.concatenateByteArrays(Utility.getSHA3HashHex(dataTypeName), Utility.getSHA3HashHex(dataValue)));
         if (debugInfo) {
-            System.out.println("The value to be hashed in getBalanceMessageHash is " +
+            System.out.println("The value to be hashed is " +
                     Hex.encodeHexString(Utility.concatenateByteArrays(Utility.getSHA3HashHex(dataTypeName), Utility.getSHA3HashHex(dataValue))));
-            System.out.println("The result of getBalanceMessageHash is " + Hex.encodeHexString(result));
+            System.out.println("The result of hashing is " + Hex.encodeHexString(result));
         }
         return result;
     }

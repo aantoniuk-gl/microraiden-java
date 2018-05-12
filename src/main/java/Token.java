@@ -141,7 +141,7 @@ public class Token {
      * @param channelAddr
      * @param senderWallet
      * @param amount
-     * @return true if is approved, false if not
+     * @return boolean      true if is approved, false if not
      */
     public boolean approve(String channelAddr, Wallet senderWallet, BigInteger amount) {
 
