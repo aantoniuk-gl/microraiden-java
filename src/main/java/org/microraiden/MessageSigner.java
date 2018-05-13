@@ -1,7 +1,11 @@
+package org.microraiden;
+
 import java.math.BigInteger;
 
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
+import org.microraiden.utils.Http;
+import org.microraiden.utils.Utility;
 
 public class MessageSigner {
 
@@ -15,7 +19,7 @@ public class MessageSigner {
     private final boolean debugInfo;
 
     /**
-     * Create a MessageSigner
+     * Create a org.microraiden.MessageSigner
      *
      * @param appendingZerosForTKN
      * @param http

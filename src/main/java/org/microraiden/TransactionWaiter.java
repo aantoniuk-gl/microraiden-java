@@ -1,6 +1,9 @@
+package org.microraiden;
+
 import java.io.IOException;
 
 import org.json.simple.JSONObject;
+import org.microraiden.utils.Http;
 
 public class TransactionWaiter {
     private static final int INTERVAL_CHECK_TRANS_DONE = 100;
@@ -21,7 +24,7 @@ public class TransactionWaiter {
      */
     public String waitingForTransaction(String transactionID) {
         if (debugInfo) {
-            System.out.println("TransactionWaiter ID = " + transactionID);
+            System.out.println("org.microraiden.TransactionWaiter ID = " + transactionID);
         }
         boolean loop = true;
         String blockNumber = "";

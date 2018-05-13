@@ -1,3 +1,5 @@
+package org.microraiden;
+
 import java.io.IOException;
 import java.math.BigInteger;
 
@@ -5,6 +7,8 @@ import org.apache.commons.codec.binary.Hex;
 import org.ethereum.core.CallTransaction;
 import org.ethereum.core.Transaction;
 import org.ethereum.util.ByteUtil;
+import org.microraiden.utils.Http;
+import org.microraiden.utils.Utility;
 
 public class Token {
     private final CallTransaction.Contract tokenContract;
@@ -72,7 +76,7 @@ public class Token {
         }
         
         if (debugInfo) {
-            System.out.println("User(" + wallet.getAccountID() + ") will trade " + value.toString() + " Wei to Token.");
+            System.out.println("User(" + wallet.getAccountID() + ") will trade " + value.toString() + " Wei to org.microraiden.Token.");
         }
 
         CallTransaction.Function mint = tokenContract.getByName("mint");

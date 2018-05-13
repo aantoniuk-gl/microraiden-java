@@ -1,3 +1,5 @@
+package org.microraiden.demo;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -14,9 +16,14 @@ import org.ethereum.crypto.ECKey;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
+import org.microraiden.MessageSigner;
+import org.microraiden.Token;
+import org.microraiden.TransferChannel;
+import org.microraiden.Wallet;
+import org.microraiden.utils.Http;
 
 /*
- * CLI for the MicroRaiden client
+ * CLI for the org.microraiden.demo.MicroRaiden client
  */
 public class MicroRaiden {
 
@@ -418,7 +425,7 @@ public class MicroRaiden {
         //some trickery to get the method with the params (if we just
         //try to search for the method without the params specified it
         //will only look for parameter-less version
-        Class cls = Class.forName("MicroRaiden");
+        Class cls = Class.forName("org.microraiden.demo.MicroRaiden");
         Method method = null;
         Method methlist[] = cls.getDeclaredMethods();
         for (int i = 0; i < methlist.length; i++) {

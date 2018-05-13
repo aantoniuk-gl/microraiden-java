@@ -56,5 +56,5 @@ dependencies {
 }
 
 // Define the main class for the application
-mainClassName = 'MicroRaiden'
+mainClassName = 'org.microraiden.demo.MicroRaiden'
 

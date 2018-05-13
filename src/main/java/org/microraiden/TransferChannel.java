@@ -1,3 +1,5 @@
+package org.microraiden;
+
 import java.io.IOException;
 import java.math.BigInteger;
 import java.util.Arrays;
@@ -9,6 +11,8 @@ import org.ethereum.core.Transaction;
 import org.ethereum.util.ByteUtil;
 import org.kocakosm.pitaya.security.Digest;
 import org.kocakosm.pitaya.security.Digests;
+import org.microraiden.utils.Http;
+import org.microraiden.utils.Utility;
 
 public class TransferChannel {
 

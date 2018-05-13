@@ -1,3 +1,5 @@
+package org.microraiden.utils;
+
 import java.math.BigInteger;
 
 import org.kocakosm.pitaya.security.Digest;

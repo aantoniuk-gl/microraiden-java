@@ -1,3 +1,5 @@
+package org.microraiden.utils;
+
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 
