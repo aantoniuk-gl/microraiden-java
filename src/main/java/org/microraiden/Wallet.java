@@ -3,6 +3,7 @@ package org.microraiden;
 import java.io.IOException;
 import java.math.BigInteger;
 
+import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
 import org.ethereum.core.Transaction;
 import org.ethereum.crypto.ECKey;
@@ -19,12 +20,28 @@ public class Wallet {
     private ECKey ecKeyPair;
 
     /**
-     * Create a wallet
+     * Create a wallet by private key as byte array
      *
      * @param privateKey byte array of private key used to retrieve the wallet.
      */
     public Wallet(byte[] privateKey) {
         this.ecKeyPair = ECKey.fromPrivate(privateKey);
+    }
+
+    /**
+     * Create a wallet by private key as a string
+     *
+     * @param privateKey string of private key used to retrieve the wallet.
+     */
+    public Wallet(String privateKey) throws DecoderException {
+        byte[] privateKeyByteArray;
+        try {
+            privateKeyByteArray = Hex.decodeHex(privateKey.toCharArray());
+        } catch (DecoderException e) {
+            System.out.println("Cannot decode private key");
+            throw e;
+        }
+        this.ecKeyPair = ECKey.fromPrivate(privateKeyByteArray);
     }
 
     /**
@@ -36,6 +53,7 @@ public class Wallet {
      */
     private BigInteger getNonce(Http httpAgent) throws IOException {
         String queryNonceString = "{\"method\":\"parity_nextNonce\",\"params\":[\"0x" + Hex.encodeHexString(ecKeyPair.getAddress()) + "\"],\"id\":42,\"jsonrpc\":\"2.0\"}";
+        System.out.println(queryNonceString);
         String myNonceResult;
         try {
             myNonceResult = (String) httpAgent.getHttpResponse(queryNonceString);

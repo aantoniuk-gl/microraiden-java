@@ -25,10 +25,10 @@ public class TransferChannel {
     private final Http http;
     private final boolean debugInfo;
 
-    public TransferChannel(String channelAddr, CallTransaction.Contract channelContract, BigInteger maxDeposit,
+    public TransferChannel(String channelAddr, String channelABI, BigInteger maxDeposit,
             Token token, BigInteger gasPrice, Http http, boolean debugInfo) {
         this.channelAddr = channelAddr;
-        this.channelContract = channelContract;
+        this.channelContract = new CallTransaction.Contract(channelABI);
         this.maxDeposit = maxDeposit;
         this.token = token;
         this.gasPrice = gasPrice;
@@ -68,7 +68,8 @@ public class TransferChannel {
             return null;
         }
         boolean approve = token.approve(channelAddr, senderWallet, initDeposit);
-        if (!approve) return null;
+        if (!approve)
+            return null;
 
         // create channel
         try {
@@ -159,12 +160,12 @@ public class TransferChannel {
     /**
      * This function is to close the channel in a cooperative manner.
      *
-     * @param delegatorWallet    the delegator's wallet used to retrieve the wallet, as the signer of the channel closing transaction.
-     * @param receiverAccountId  the account id of receiver of this channel
-     * @param balanceMsgHashSig  signed balance by sender
-     * @param closingMsgHashSig  signed closing message by receiver
-     * @param openBlockNum       the block index where the channel was open in decimal literal
-     * @param balance            the double literal of the amount of taken paying to the receiver.
+     * @param delegatorWallet   the delegator's wallet used to retrieve the wallet, as the signer of the channel closing transaction.
+     * @param receiverAccountId the account id of receiver of this channel
+     * @param balanceMsgHashSig signed balance by sender
+     * @param closingMsgHashSig signed closing message by receiver
+     * @param openBlockNum      the block index where the channel was open in decimal literal
+     * @param balance           the double literal of the amount of taken paying to the receiver.
      * @return boolean           true if channel was closed correctly, false if not
      */
     public boolean closeChannelCooperatively(Wallet delegatorWallet,

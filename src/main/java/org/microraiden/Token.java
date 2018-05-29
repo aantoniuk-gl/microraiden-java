@@ -11,6 +11,7 @@ import org.microraiden.utils.Http;
 import org.microraiden.utils.Utility;
 
 public class Token {
+
     private final CallTransaction.Contract tokenContract;
     private final String tokenAddr;
     private final String appendingZerosForTKN;
@@ -20,9 +21,9 @@ public class Token {
     private final boolean debugInfo;
     private final TransactionWaiter transactionWaiter;
 
-    public Token(CallTransaction.Contract tokenContract, String tokenAddr, String appendingZerosForTKN,
+    public Token(String tokenABI, String tokenAddr, String appendingZerosForTKN,
             String appendingZerosForETH, BigInteger gasPrice, Http httpAgent, boolean debugInfo) {
-        this.tokenContract = tokenContract;
+        this.tokenContract = new CallTransaction.Contract(tokenABI);
         this.tokenAddr = tokenAddr;
         this.appendingZerosForTKN = appendingZerosForTKN;
         this.appendingZerosForETH = appendingZerosForETH;
@@ -65,7 +66,7 @@ public class Token {
                                 (new BigInteger(appendingZerosForTKN, 10).doubleValue())) + " TKN");
         return myTokenBalance;
     }
-    
+
     public void mint(Wallet wallet, String amountOfEther) {
         BigInteger value;
         try {
@@ -74,7 +75,7 @@ public class Token {
             System.out.println("The provided balance is not valid.");
             return;
         }
-        
+
         if (debugInfo) {
             System.out.println("User(" + wallet.getAccountID() + ") will trade " + value.toString() + " Wei to org.microraiden.Token.");
         }
@@ -142,6 +143,7 @@ public class Token {
 
     /**
      * Approve sender to transfer some amount of tokens to any address.
+     *
      * @param channelAddr
      * @param senderWallet
      * @param amount

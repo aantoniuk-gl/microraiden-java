@@ -11,7 +11,6 @@ import java.math.BigInteger;
 
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
-import org.ethereum.core.CallTransaction;
 import org.ethereum.crypto.ECKey;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -20,6 +19,7 @@ import org.microraiden.MessageSigner;
 import org.microraiden.Token;
 import org.microraiden.TransferChannel;
 import org.microraiden.Wallet;
+import org.microraiden.conf.Configuration;
 import org.microraiden.utils.Http;
 
 /*
@@ -27,18 +27,7 @@ import org.microraiden.utils.Http;
  */
 public class MicroRaiden {
 
-    private static String rpcAddress = null;
-    private static String channelAddr = null;
-    private static String tokenAddr = null;
-    private static CallTransaction.Contract tokenContract = null;
-
-    private static CallTransaction.Contract channelContract = null;
-    private static BigInteger MAX_DEPOSIT = null;
-    private static String appendingZerosForTKN = null;
-    private static String appendingZerosForETH = null;
-    private static BigInteger gasPrice = null;
-    private static boolean debugInfo = false;
-
+    private static Configuration conf = null;
     private static Http httpAgent = null;
     private static Token token = null;
     private static TransferChannel transferChannel = null;
@@ -250,9 +239,11 @@ public class MicroRaiden {
         System.out.println("User " + delegatorWallet.getAccountID() + " is the delegator to close the channel " +
                 senderName + " ==> " + receiverName + " at balance = " + balance + ".");
 
-        MessageSigner messageSigner = new MessageSigner(appendingZerosForTKN, httpAgent, debugInfo);
-        byte[] balanceMsgHashSig = messageSigner.genBalanceMsgHashSig(senderWallet, receiverWallet.getAccountID(), channelAddr, openBlockNum, balance);
-        byte[] closingMsgHashSig = messageSigner.genClosingMsgHashSig(receiverWallet, senderWallet.getAccountID(), channelAddr, openBlockNum, balance);
+        MessageSigner messageSigner = new MessageSigner(conf.getAppendingZerosForTKN(), httpAgent, conf.isDebugInfo());
+        byte[] balanceMsgHashSig = messageSigner.genBalanceMsgHashSig(senderWallet, receiverWallet.getAccountID(),
+                conf.getChannelAddr(), openBlockNum, balance);
+        byte[] closingMsgHashSig = messageSigner.genClosingMsgHashSig(receiverWallet, senderWallet.getAccountID(),
+                conf.getChannelAddr(), openBlockNum, balance);
 
         transferChannel.closeChannelCooperatively(
                 delegatorWallet,
@@ -332,79 +323,92 @@ public class MicroRaiden {
         JSONParser parser = new JSONParser();
 
         try {
+            conf = new Configuration();
             Object obj = parser.parse(new FileReader("rm-ethereum.conf"));
-
             JSONObject jsonObject = (JSONObject) obj;
             for (Object key : jsonObject.keySet()) {
                 switch ((String) key) {
                     case "debugInfo":
-                        debugInfo = jsonObject.get(key).equals("true");
+                        conf.setDebugInfo(jsonObject.get(key).equals("true"));
                         break;
                     case "gasPrice":
-                        gasPrice = new BigInteger((String) jsonObject.get(key), 10);
-                        if (debugInfo) {
-                            System.out.println("The global gas price is set to be " + gasPrice.toString(10));
+                        conf.setGasPrice(new BigInteger((String) jsonObject.get(key), 10));
+                        if (conf.isDebugInfo()) {
+                            System.out.println("The global gas price is set to be " + conf.getGasPrice().toString(10));
                         }
                         break;
                     case "rpcAddress":
-                        rpcAddress = ((String) jsonObject.get(key));
-                        if (debugInfo) {
-                            System.out.println("rpcAddress = " + rpcAddress);
+                        conf.setRpcAddress(((String) jsonObject.get(key)));
+                        if (conf.isDebugInfo()) {
+                            System.out.println("rpcAddress = " + conf.getRpcAddress());
                         }
                         break;
                     case "channelAddr":
-                        channelAddr = ((String) jsonObject.get(key));
-                        if (debugInfo) {
-                            System.out.println("channelAddr = " + channelAddr);
+                        conf.setChannelAddr(((String) jsonObject.get(key)));
+                        if (conf.isDebugInfo()) {
+                            System.out.println("channelAddr = " + conf.getChannelAddr());
                         }
                         break;
                     case "tokenAddr":
-                        tokenAddr = ((String) jsonObject.get(key));
-                        if (debugInfo) {
-                            System.out.println("tokenAddr = " + tokenAddr);
+                        conf.setTokenAddr(((String) jsonObject.get(key)));
+                        if (conf.isDebugInfo()) {
+                            System.out.println("tokenAddr = " + conf.getTokenAddr());
                         }
                         break;
                     case "channelABI":
-                        String channelABI = ((String) jsonObject.get(key));
-                        if (debugInfo) {
-                            System.out.println("channelABI = " + channelABI);
+                        conf.setChannelABI(((String) jsonObject.get(key)));
+                        if (conf.isDebugInfo()) {
+                            System.out.println("channelABI = " + conf.getChannelABI());
                         }
-                        channelContract = new CallTransaction.Contract(channelABI);
                         break;
                     case "tokenABI":
-                        String tokenABI = ((String) jsonObject.get(key));
-                        if (debugInfo) {
-                            System.out.println("tokenABI = " + tokenABI);
+                        conf.setTokenABI(((String) jsonObject.get(key)));
+                        if (conf.isDebugInfo()) {
+                            System.out.println("tokenABI = " + conf.getTokenABI());
                         }
-                        tokenContract = new CallTransaction.Contract(tokenABI);
                         break;
                     case "appendingZerosForETH":
-                        appendingZerosForETH = ((String) jsonObject.get(key));
-                        if (debugInfo) {
-                            System.out.println("appendingZerosForETH = " + appendingZerosForETH);
+                        conf.setAppendingZerosForETH(((String) jsonObject.get(key)));
+                        if (conf.isDebugInfo()) {
+                            System.out.println("appendingZerosForETH = " + conf.getAppendingZerosForETH());
                         }
                         break;
                     case "appendingZerosForTKN":
-                        appendingZerosForTKN = ((String) jsonObject.get(key));
-                        if (debugInfo) {
-                            System.out.println("appendingZerosForTKN = " + appendingZerosForTKN);
+                        conf.setAppendingZerosForTKN(((String) jsonObject.get(key)));
+                        if (conf.isDebugInfo()) {
+                            System.out.println("appendingZerosForTKN = " + conf.getAppendingZerosForTKN());
                         }
                         break;
                     case "maxDepositBits":
-                        MAX_DEPOSIT = new BigInteger("2", 10).pow(Integer.parseInt(((String) jsonObject.get(key))));
-                        gasPrice = new BigInteger((String) jsonObject.get(key), 10);
-                        if (debugInfo) {
-                            System.out.println("MAX_DEPOSIT =" + MAX_DEPOSIT.toString(16));
+                        conf.setMaxDepositBits(Integer.parseInt((String) jsonObject.get(key)));
+                        if (conf.isDebugInfo()) {
+                            System.out.println("MAX_DEPOSIT =" + conf.getMaxDepositBits());
                         }
                         break;
-
                     default:
                         System.out.println("Unknown key is detected when parsing the configuration files.");
                 }
-                httpAgent = new Http(rpcAddress, debugInfo);
-                token = new Token(tokenContract, tokenAddr, appendingZerosForTKN, appendingZerosForETH, gasPrice, httpAgent, debugInfo);
-                transferChannel = new TransferChannel(channelAddr, channelContract, MAX_DEPOSIT, token, gasPrice, httpAgent, debugInfo);
             }
+            httpAgent = new Http(conf.getRpcAddress(), conf.isDebugInfo());
+
+            token = new Token(
+                    conf.getTokenABI(),
+                    conf.getTokenAddr(),
+                    conf.getAppendingZerosForTKN(),
+                    conf.getAppendingZerosForETH(),
+                    conf.getGasPrice(),
+                    httpAgent,
+                    conf.isDebugInfo());
+
+            BigInteger maxDeposit = new BigInteger("2", 10).pow(conf.getMaxDepositBits());
+            transferChannel = new TransferChannel(
+                    conf.getChannelAddr(),
+                    conf.getChannelABI(),
+                    maxDeposit,
+                    token,
+                    conf.getGasPrice(),
+                    httpAgent,
+                    conf.isDebugInfo());
         } catch (FileNotFoundException e) {
 
         } catch (ParseException e) {
