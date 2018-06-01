@@ -97,20 +97,24 @@ public class TransferChannel {
         if (debugInfo) {
             System.out.println("The request string of queryCreatChannelGasString is " + queryCreatChannelGasString);
         }
-        String creatChannelGasEstimate;
+        String createChannelGasEstimate;
         try {
-            creatChannelGasEstimate = (String) http.getHttpResponse(queryCreatChannelGasString);
+            createChannelGasEstimate = (String) http.getHttpResponse(queryCreatChannelGasString);
         } catch (IOException e) {
             System.out.println("Invoking function with given arguments is not allowed.");
             return null;
         }
 
+        if (createChannelGasEstimate == null) {
+            return null;
+        }
+
         if (debugInfo) {
-            System.out.println("The estimatedGas of createChannelERC20 is " + creatChannelGasEstimate);
+            System.out.println("The estimatedGas of createChannelERC20 is " + createChannelGasEstimate);
         }
         Transaction createTrans = new Transaction(Utility.bigIntegerToBytes(senderWallet.nonce()), // nonce
                 Utility.bigIntegerToBytes(gasPrice), // gas price
-                Utility.bigIntegerToBytes(new BigInteger(creatChannelGasEstimate.substring(2), 16)), // gas limit
+                Utility.bigIntegerToBytes(new BigInteger(createChannelGasEstimate.substring(2), 16)), // gas limit
                 ByteUtil.hexStringToBytes(channelAddr), // to id
                 Utility.bigIntegerToBytes(new BigInteger("0", 10)), // value
                 createChannelERC20FunctionBytes, 42);// chainid

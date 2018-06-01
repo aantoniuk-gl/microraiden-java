@@ -178,6 +178,10 @@ public class Token {
             System.out.println("The nonce of " + senderWallet.getAccountID() + " is " + senderWallet.nonce().toString(10));
         }
 
+        if (approveGasEstimate == null) {
+            return false;
+        }
+
         Transaction approveTrans = new Transaction(Utility.bigIntegerToBytes(senderWallet.nonce()), // nonce
                 Utility.bigIntegerToBytes(gasPrice), // gas price
                 Utility.bigIntegerToBytes(new BigInteger(approveGasEstimate.substring(2), 16)), // gas limit
